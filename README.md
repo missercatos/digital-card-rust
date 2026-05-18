@@ -28,6 +28,44 @@ cargo run --release
 
 `art.txt` 已随项目提供。启动即自动加载。
 
+## 中文技能标签
+
+技能标签支持中文，`skill_names` 数组（`src/main.rs:185`）中的内容已改为 `String` 类型，可直接写入中文：
+
+```rust
+let skill_names: &[&str] = &[
+    "Rust", "Python", "机器学习", "Web 开发",
+    "Linux", "Docker", "Git", "SQL",
+    "云计算", "开源", "Go", "React",
+    "C++", "K8s", "CI/CD", "API 设计",
+    "", "", "", "",
+];
+```
+
+### CJK 字体配置
+
+中文渲染需要系统安装 CJK 字体。程序会自动搜索以下路径（`src/main.rs:112-127`）：
+
+| 系统 | 自动搜索路径 |
+|------|-------------|
+| Linux | `/usr/share/fonts/noto-cjk/NotoSansCJK-*.ttc` |
+| Linux | `/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc` |
+| Linux | `/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf` |
+| macOS | `/System/Library/Fonts/PingFang.ttc` |
+| Windows | `C:\Windows\Fonts\msyh.ttc` / `simsun.ttc` |
+
+**Linux 安装 CJK 字体：**
+
+```bash
+# Ubuntu/Debian
+sudo apt install fonts-noto-cjk
+
+# Arch
+sudo pacman -S noto-fonts-cjk
+```
+
+未找到 CJK 字体时，中文技能标签会显示为空白/方块，英文标签正常。
+
 ## ASCII 艺术文件规范
 
 ### 文件命名
@@ -82,16 +120,16 @@ jp2a photo.jpg --width=80 > art.txt
 | 散开力度 | `src/main.rs:7` `REPULSION_FORCE` | 当前 1100.0 |
 | 颜色主题 | `src/main.rs:95` `dot_color` 函数 | 修改 RGB 通道 |
 | 窗口大小 | `src/main.rs:104-105` `window_width`/`window_height` | 当前 1300×850 |
-| 窗口标题 | `src/main.rs:103` `window_title` | 当前 "Misser - Digital Card" |
-| 技能标签列表 | `src/main.rs:164` `skill_names` 数组 | 20 个槽位，留空为 `""` |
-| 技能字体大小 | `src/main.rs:279` `measure_text(... 21 ...)` 和 `L281` `21.0` | 当前 21 |
-| 背景网格间距 | `src/main.rs:234` `grid_spacing` | 当前 45.0 |
-| 背景网格颜色 | `src/main.rs:235` `grid_color` | RGB+Alpha |
-| 粒子密度阈值 | `src/main.rs:142` `if d > 0.02` | 越小粒子越多 |
-| 提示文字 | `src/main.rs:289-291` `let hint = ...` | 交互提示 |
-| 粒子水平间距 | `src/main.rs:130` `CHAR_SIZE * 0.33` | 越小越密 |
-| 粒子垂直间距 | `src/main.rs:131` `CHAR_SIZE * 0.85` | 越小越密 |
-| 技能圆环半径 | `src/main.rs:177` `screen_width()... * 0.38` | 技能距中心距离 |
+| 窗口标题 | `src/main.rs:103` `window_title` | 当前 "Digital Card" |
+| 技能标签列表 | `src/main.rs:185` `skill_names` 数组 | 20 个槽位，支持中文 |
+| 技能字体大小 | `src/main.rs:308` `21` 和 `L304` `21` | 当前 21 |
+| CJK 字体路径 | `src/main.rs:112` `load_cjk_font` 函数 | 搜索路径列表 |
+| 背景网格间距 | `src/main.rs:255` `grid_spacing` | 当前 45.0 |
+| 背景网格颜色 | `src/main.rs:256` `grid_color` | RGB+Alpha |
+| 粒子密度阈值 | `src/main.rs:163` `if d > 0.02` | 越小粒子越多 |
+| 粒子水平间距 | `src/main.rs:151` `CHAR_SIZE * 0.33` | 越小越密 |
+| 粒子垂直间距 | `src/main.rs:152` `CHAR_SIZE * 0.85` | 越小越密 |
+| 技能圆环半径 | `src/main.rs:198` `screen_width()... * 0.38` | 技能距中心距离 |
 
 ## 交叉编译
 
@@ -110,6 +148,7 @@ cargo apk build --release
 - [macroquad](https://github.com/not-fl3/macroquad) — 跨平台 2D 渲染
 - 粒子弹簧物理 (胡克定律) + 斥力场交互
 - ASCII 点阵生成 (字符密度 → 亮度映射 + Box Blur 平滑)
+- 系统 CJK 字体自动检测加载
 
 ## License
 

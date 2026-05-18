@@ -20,7 +20,7 @@ struct Particle {
 }
 
 struct Skill {
-    text: &'static str,
+    text: String,
     x: f32,
     y: f32,
     bx: f32,
@@ -31,7 +31,7 @@ struct Skill {
     amp_y: f32,
 }
 
-fn load_ascii_art_from_file(path: &str) -> Option<Vec<Vec<f32>>> {
+fn load_ascii_art_from_file(path: &str) -> Option<Vec<Vec<(f32, char)>>> {
     let content = std::fs::read_to_string(path).ok()?;
     let lines: Vec<&str> = content.lines().collect();
     if lines.is_empty() {
@@ -44,7 +44,8 @@ fn load_ascii_art_from_file(path: &str) -> Option<Vec<Vec<f32>>> {
         return None;
     }
 
-    let mut grid = vec![vec![0.0f32; w]; h];
+    let mut density_grid = vec![vec![0.0f32; w]; h];
+    let mut char_grid = vec![vec![' '; w]; h];
 
     for (y, line) in lines.iter().enumerate() {
         for (x, ch) in line.chars().enumerate() {
@@ -61,7 +62,8 @@ fn load_ascii_art_from_file(path: &str) -> Option<Vec<Vec<f32>>> {
                 _ => 0.8,
             };
             if ch != ' ' {
-                grid[y][x] = density;
+                density_grid[y][x] = density;
+                char_grid[y][x] = ch;
             }
         }
     }
@@ -76,16 +78,23 @@ fn load_ascii_art_from_file(path: &str) -> Option<Vec<Vec<f32>>> {
                     let ny = y as isize + dy;
                     let nx = x as isize + dx;
                     if ny >= 0 && ny < h as isize && nx >= 0 && nx < w as isize {
-                        sum += grid[ny as usize][nx as usize];
+                        sum += density_grid[ny as usize][nx as usize];
                         cnt += 1;
                     }
                 }
             }
-            blurred[y][x] = (sum / cnt as f32).max(grid[y][x]);
+            blurred[y][x] = (sum / cnt as f32).max(density_grid[y][x]);
         }
     }
 
-    Some(blurred)
+    let mut result = vec![vec![(0.0f32, ' '); w]; h];
+    for y in 0..h {
+        for x in 0..w {
+            result[y][x] = (blurred[y][x], char_grid[y][x]);
+        }
+    }
+
+    Some(result)
 }
 
 fn density_to_dot_brightness(d: f32) -> f32 {
@@ -100,13 +109,32 @@ fn dot_color(brightness: f32) -> Color {
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "Misser - Digital Card".to_owned(),
+        window_title: "Digital Card".to_owned(),
         window_width: 1300,
         window_height: 850,
         window_resizable: true,
         high_dpi: true,
         ..Default::default()
     }
+}
+
+async fn load_cjk_font() -> Option<Font> {
+    let paths = [
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Light.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+        "/System/Library/Fonts/PingFang.ttc",
+        "C:\\Windows\\Fonts\\msyh.ttc",
+        "C:\\Windows\\Fonts\\simsun.ttc",
+    ];
+    for p in &paths {
+        if let Ok(font) = load_ttf_font(p).await {
+            return Some(font);
+        }
+    }
+    None
 }
 
 #[macroquad::main(window_conf)]
@@ -118,10 +146,12 @@ async fn main() {
         "art.txt".to_string()
     };
 
+    let cjk_font = load_cjk_font().await;
+
     let (art_grid, art_label) = match load_ascii_art_from_file(&path) {
         Some(grid) => (grid, path),
         None => (
-            vec![vec![0.0f32; 0]; 0],
+            vec![vec![(0.0f32, ' '); 0]; 0],
             String::new(),
         ),
     };
@@ -140,8 +170,8 @@ async fn main() {
 
     for gy in 0..grid_h {
         for gx in 0..grid_w {
-            let d = art_grid[gy][gx];
-            if d > 0.02 {
+            let (d, ch) = art_grid[gy][gx];
+            if d > 0.02 && ch != ' ' {
                 let tx = art_start_x + gx as f32 * sx;
                 let ty = art_start_y + gy as f32 * sy;
                 let rx = macroquad::rand::gen_range(0.0, screen_width());
@@ -154,7 +184,7 @@ async fn main() {
                     ty,
                     vx: macroquad::rand::gen_range(-100.0, 100.0),
                     vy: macroquad::rand::gen_range(-100.0, 100.0),
-                    ch: '.',
+                    ch,
                     brightness: density_to_dot_brightness(d),
                 });
             }
@@ -179,7 +209,7 @@ async fn main() {
         let by = screen_height() / 2.0 + angle.sin() * r;
 
         skills.push(Skill {
-            text: name,
+            text: name.to_string(),
             x: bx,
             y: by,
             bx,
@@ -276,13 +306,20 @@ async fn main() {
             }
             let alpha = 0.38 + 0.14 * (time * s.speed * 1.2).sin();
             let color = Color::new(0.10, 0.72, 0.85, alpha);
-            let dims = measure_text(s.text, None, 21, 1.0);
-            draw_text(
-                s.text,
+            let params = TextParams {
+                font: cjk_font.as_ref(),
+                font_size: 21,
+                font_scale: 1.0,
+                font_scale_aspect: 1.0,
+                rotation: 0.0,
+                color,
+            };
+            let dims = measure_text(&s.text, cjk_font.as_ref(), 21, 1.0);
+            draw_text_ex(
+                &s.text,
                 s.x - dims.width / 2.0,
                 s.y - dims.height / 2.0,
-                21.0,
-                color,
+                params,
             );
         }
 
