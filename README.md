@@ -1,26 +1,24 @@
-# Digital Card — Rust 电子名片
+# Digital Card — Rust 电子名片模板
 
-一个用 Rust 编写的交互式电子名片程序。ASCII 字符画由粒子组成，鼠标/触屏悬停时粒子散开，移开后自动复原。技能标签以浮动动画环绕。
+Rust 实现的交互式电子名片，粒子组成的 ASCII 点阵艺术字 + 浮动技能标签。
 
-<br>
+鼠标/触屏按住将粒子驱散，松手后弹簧物理拉回原位。
+
 <p align="center">
-  <img src="https://img.shields.io/badge/rust-1.70%2B-orange" alt="rust version">
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-blue" alt="platform">
-  <img src="https://img.shields.io/badge/binary-~800KB-green" alt="binary size">
-  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
+  <img src="https://img.shields.io/badge/rust-1.70%2B-orange">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-blue">
+  <img src="https://img.shields.io/badge/binary-~820KB-green">
+  <img src="https://img.shields.io/badge/license-MIT-lightgrey">
 </p>
 
-## 效果演示
+## 效果
 
-- 打开即显示由 ASCII 字符粒子组成的 "MISSER" 艺术字（jp2a 风格）
-- **点击并按住鼠标**（或触屏），粒子会从光标位置散开，靠近光标的粒子产生辉光效果
-- **松开鼠标**，弹簧物理系统将粒子拉回原位
-- 用户技能标签围绕中心艺术字做正弦浮动动画
-- 深色背景 + 网格线，类似终端/黑客风格
+- 启动即展示个人字符画，这里用 Misser 艺术字示例
+- **按住鼠标 / 触屏**，粒子从光标处散射，靠近光标的粒子产生辉光
+- **松开**后弹簧模型将粒子拉回原位
+- 技能标签围绕中心做正弦浮动，深色背景 + 网格线
 
 ## 快速开始
-
-### 编译运行
 
 ```bash
 git clone https://github.com/yourname/digital-card.git
@@ -28,7 +26,78 @@ cd digital-card
 cargo run --release
 ```
 
-### 交叉编译
+## 使用自定义 ASCII 艺术（.txt 文件）
+
+支持通过命令行加载任意 ASCII 艺术文本文件，渲染为点阵粒子：
+
+```bash
+# 使用 jp2a 从图片生成 ASCII 文本，或手写 ASCII 艺术文件
+./digital-card my_art.txt
+```
+
+### ASCII 艺术文件格式
+
+纯文本文件，空格为空白，非空格字符**按视觉密度**映射为不同亮度的 `.` 粒子：
+
+| 字符密度 | 示例字符 | 粒子亮度 |
+|----------|----------|----------|
+| 最密 | `@#$%&` | 最亮 |
+| 密 | `8BMWN0` | 亮 |
+| 中密 | `*+=XZ` | 中等 |
+| 中 | `oahkb` | 中等偏暗 |
+| 偏淡 | `dpqwm` | 暗 |
+| 淡 | `-~:\|/` | 很暗 |
+| 最淡 | `.,'` `` ` `` | 极暗 |
+| 空白 | (空格) | 不生成粒子 |
+
+**示例 `my_art.txt`：**
+
+```
+    @@@@@@
+   @@@@@@@@
+  @@@@@@@@@@
+ @@@@@@@@@@@@
+@@@@@@@@@@@@@@
+ @@@@    @@@@
+ @@@@    @@@@
+ @@@@    @@@@
+ @@@@    @@@@
+ @@@@@@@@@@@@
+  @@@@@@@@@@
+```
+
+### 用 jp2a 生成 ASCII 文本
+
+```bash
+# 安装 jp2a (Ubuntu/Debian)
+sudo apt install jp2a
+
+# 将图片转为 ASCII 文本，存入 .txt
+jp2a photo.jpg --width=80 > art.txt
+
+# 在电子名片中加载
+./digital-card art.txt
+```
+
+建议生成宽度 40\~120 字符、高度 15\~80 行的 ASCII 文本以获得最佳点阵效果。
+
+## 自定义
+
+编辑 `src/main.rs`：
+
+| 项目 | 行号区域 | 说明 |
+|------|----------|------|
+| 默认名字 | `generate_ascii_art_from_letters("MISSER")` | 改为你的名字 |
+| 技能标签 | `skill_names` 数组（20 个槽位，留空为 `""`） | 替换技能列表 |
+| 字符大小 | `CHAR_SIZE` 常量 | 调整点的大小 |
+| 散开半径 | `REPULSION_RADIUS` | 鼠标影响范围 |
+| 弹簧力度 | `SPRING_K` | 粒子回弹速度 |
+| 颜色主题 | `dot_color` 函数 | 修改 RGB |
+| 窗口大小 | `window_width/height` | 默认窗口尺寸 |
+
+如需添加新的字母形状（中文字等），在 `letter_pattern` 函数按 14×18 位图格式（`1` 填充、`.` 留空）添加定义，程序自动做上采样 + 模糊平滑。
+
+## 交叉编译
 
 ```bash
 # Windows .exe
@@ -40,47 +109,11 @@ cargo install cargo-apk
 cargo apk build --release
 ```
 
-编译后二进制仅 ~800KB，可直接分发执行。
+## 技术栈
 
-## 自定义
-
-编辑 `src/main.rs`：
-
-| 自定义项 | 位置 | 说明 |
-|---------|------|------|
-| 名字文本 | 第 192 行 `let art_text = "MISSER"` | 修改为你的名字 |
-| 技能标签 | 第 228 行 `skill_names` 数组 | 替换为你的技能栈 |
-| 粒子间距 | 第 21 行 `CHAR_SIZE` | 调整字符大小 |
-| 散开半径 | 第 12 行 `REPULSION_RADIUS` | 鼠标影响范围 |
-| 弹簧力度 | 第 9 行 `SPRING_K` | 粒子回弹速度 |
-| 颜色主题 | 第 155 行 `brightness_to_color` | 修改 RGB 通道值 |
-| 窗口尺寸 | 第 182 行 `window_width/window_height` | 调整默认窗口大小 |
-
-### 自定义字母形态
-
-如需支持更多字符（中文等），在 `letter_pattern` 函数（第 33 行）中添加对应字母的位图定义即可。位图格式为 10 行字符串，`1` 表示填充、`.` 表示留空，程序会自动上采样+模糊生成平滑的 ASCII 艺术。
-
-## 技术架构
-
-```
-macroquad (跨平台渲染引擎)
-├── 程序化 ASCII 生成
-│   ├── 字母位图定义 (10×n 网格)
-│   ├── 3x 上采样 + Box Blur 平滑
-│   └── 亮度 → 字符密度映射 (@%#*+=-:.)
-├── 粒子物理系统
-│   ├── 弹簧模型 (胡克定律)
-│   ├── 斥力场 (鼠标交互)
-│   └── 速度阻尼
-└── UI 层
-    ├── 浮动技能标签 (正弦轨迹)
-    └── 背景网格 + 辉光反馈
-```
-
-## 依赖
-
-- [macroquad](https://github.com/not-fl3/macroquad) — 跨平台 2D 渲染框架
-- 零额外运行时依赖
+- [macroquad](https://github.com/not-fl3/macroquad) — 跨平台 2D 渲染
+- 粒子弹簧物理 (胡克定律) + 斥力场交互
+- 程序化 ASCII 点阵生成 (位图 → 上采样 → Box Blur → 亮度映射)
 
 ## License
 
