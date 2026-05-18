@@ -31,218 +31,6 @@ struct Skill {
     amp_y: f32,
 }
 
-fn letter_pattern(c: char) -> Vec<&'static str> {
-    match c {
-        'M' => vec![
-            "1..............1",
-            "11............11",
-            "1.11........11.1",
-            "1..11......11..1",
-            "1...11....11...1",
-            "1....11..11....1",
-            "1.....1111.....1",
-            "1......11......1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-            "1..............1",
-        ],
-        'I' => vec![
-            ".....111111.....",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".......11.......",
-            ".....111111.....",
-        ],
-        'S' => vec![
-            "....11111111....",
-            "...11......11...",
-            "..11............",
-            "..11............",
-            "...11...........",
-            "....1111111.....",
-            ".........1111...",
-            "..........111...",
-            "..........111...",
-            "............11..",
-            "..11........11..",
-            "...11......11...",
-            "....11111111....",
-            "................",
-            "................",
-            "................",
-            "................",
-            "................",
-            "................",
-            "................",
-        ],
-        'E' => vec![
-            "..111111111111..",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..111111111111..",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..11............",
-            "..111111111111..",
-        ],
-        'R' => vec![
-            "..11111111111...",
-            "..11.......11...",
-            "..11........11..",
-            "..11........11..",
-            "..11........11..",
-            "..11.......11...",
-            "..11111111111...",
-            "..11...11.......",
-            "..11....11......",
-            "..11.....11.....",
-            "..11......11....",
-            "..11.......11...",
-            "..11........11..",
-            "..11.........11.",
-            "................",
-            "................",
-            "................",
-            "................",
-            "................",
-            "................",
-        ],
-        ' ' => vec!["................"],
-        _ => vec![" "],
-    }
-}
-
-fn generate_ascii_art_from_letters(text: &str) -> Vec<Vec<f32>> {
-    let scale: usize = 4;
-    let blur_passes: usize = 2;
-    let spacer_w: usize = 4;
-
-    let text_upper: String = text.to_uppercase();
-    let letters: Vec<Vec<&str>> = text_upper
-        .chars()
-        .map(|c| letter_pattern(c))
-        .collect();
-
-    let letter_h = letters[0].len();
-    let letter_w = letters[0][0].len();
-
-    let mut total_w = 0usize;
-    for (i, _) in letters.iter().enumerate() {
-        if i > 0 {
-            total_w += spacer_w;
-        }
-        total_w += letter_w;
-    }
-
-    let mut raw_grid = vec![vec![false; total_w]; letter_h];
-
-    let mut cx = 0usize;
-    for (i, letter) in letters.iter().enumerate() {
-        if i > 0 {
-            cx += spacer_w;
-        }
-        for (y, row) in letter.iter().enumerate() {
-            for (x, ch) in row.chars().enumerate() {
-                if x < letter_w {
-                    raw_grid[y][cx + x] = ch != '.' && ch != ' ';
-                }
-            }
-        }
-        cx += letter_w;
-    }
-
-    let up_h = letter_h * scale;
-    let up_w = total_w * scale;
-    let mut current = vec![vec![0.0f32; up_w]; up_h];
-    let mut next = vec![vec![0.0f32; up_w]; up_h];
-
-    for y in 0..letter_h {
-        for x in 0..total_w {
-            let val = if raw_grid[y][x] { 1.0f32 } else { 0.0f32 };
-            for dy in 0..scale {
-                for dx in 0..scale {
-                    current[y * scale + dy][x * scale + dx] = val;
-                }
-            }
-        }
-    }
-
-    for _ in 0..blur_passes {
-        for y in 0..up_h {
-            for x in 0..up_w {
-                let mut sum = 0.0f32;
-                let mut count = 0i32;
-                let r: isize = 1;
-                for dy in -r..=r {
-                    for dx in -r..=r {
-                        let ny = y as isize + dy;
-                        let nx = x as isize + dx;
-                        if ny >= 0 && ny < up_h as isize && nx >= 0 && nx < up_w as isize {
-                            sum += current[ny as usize][nx as usize];
-                            count += 1;
-                        }
-                    }
-                }
-                next[y][x] = sum / count as f32;
-            }
-        }
-        std::mem::swap(&mut current, &mut next);
-    }
-
-    let mut result = vec![vec![0.0f32; total_w]; letter_h];
-    for y in 0..letter_h {
-        for x in 0..total_w {
-            let mut sum = 0.0f32;
-            for dy in 0..scale {
-                for dx in 0..scale {
-                    let py = y * scale + dy;
-                    let px = x * scale + dx;
-                    sum += current[py][px];
-                }
-            }
-            result[y][x] = sum / (scale * scale) as f32;
-        }
-    }
-
-    result
-}
-
 fn load_ascii_art_from_file(path: &str) -> Option<Vec<Vec<f32>>> {
     let content = std::fs::read_to_string(path).ok()?;
     let lines: Vec<&str> = content.lines().collect();
@@ -324,28 +112,22 @@ fn window_conf() -> Conf {
 #[macroquad::main(window_conf)]
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
-
-    let (art_grid, art_label) = if args.len() > 1 {
-        match load_ascii_art_from_file(&args[1]) {
-            Some(grid) => (grid, args[1].clone()),
-            None => {
-                eprintln!(
-                    "Could not load '{}', falling back to default art.",
-                    args[1]
-                );
-                (generate_ascii_art_from_letters("MISSER"), "MISSER".to_string())
-            }
-        }
+    let path = if args.len() > 1 {
+        args[1].clone()
     } else {
-        (generate_ascii_art_from_letters("MISSER"), "MISSER".to_string())
+        "art.txt".to_string()
+    };
+
+    let (art_grid, art_label) = match load_ascii_art_from_file(&path) {
+        Some(grid) => (grid, path),
+        None => (
+            vec![vec![0.0f32; 0]; 0],
+            String::new(),
+        ),
     };
 
     let grid_h = art_grid.len();
     let grid_w = if grid_h > 0 { art_grid[0].len() } else { 0 };
-
-    if grid_w == 0 || grid_h == 0 {
-        panic!("Failed to generate any art");
-    }
 
     let sx = CHAR_SIZE * 0.33;
     let sy = CHAR_SIZE * 0.85;
