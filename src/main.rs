@@ -1,10 +1,12 @@
 use macroquad::prelude::*;
 use std::f32::consts::PI;
 
-const SPRING_K: f32 = 0.07;
-const DAMPING: f32 = 0.86;
+const EMBEDDED_ART: &str = include_str!("../art.txt");
+
+const SPRING_K: f32 = 0.15;
+const DAMPING: f32 = 0.82;
 const REPULSION_RADIUS: f32 = 180.0;
-const REPULSION_FORCE: f32 = 1100.0;
+const REPULSION_FORCE: f32 = 1800.0;
 const CHAR_SIZE: f32 = 21.0;
 
 #[derive(Clone)]
@@ -33,6 +35,10 @@ struct Skill {
 
 fn load_ascii_art_from_file(path: &str) -> Option<Vec<Vec<(f32, char)>>> {
     let content = std::fs::read_to_string(path).ok()?;
+    parse_ascii_art(&content)
+}
+
+fn parse_ascii_art(content: &str) -> Option<Vec<Vec<(f32, char)>>> {
     let lines: Vec<&str> = content.lines().collect();
     if lines.is_empty() {
         return None;
@@ -87,6 +93,36 @@ fn load_ascii_art_from_file(path: &str) -> Option<Vec<Vec<(f32, char)>>> {
         }
     }
 
+    let cr = ((w.min(h) as f32) * 0.15).max(2.0) as usize;
+    if cr > 0 && w > cr * 2 && h > cr * 2 {
+        for y in 0..h {
+            for x in 0..w {
+                let in_corner = if x < cr && y < cr {
+                    let dx = cr as f32 - x as f32 - 0.5;
+                    let dy = cr as f32 - y as f32 - 0.5;
+                    dx * dx + dy * dy > (cr as f32) * (cr as f32)
+                } else if x >= w - cr && y < cr {
+                    let dx = x as f32 - (w - cr) as f32 + 0.5;
+                    let dy = cr as f32 - y as f32 - 0.5;
+                    dx * dx + dy * dy > (cr as f32) * (cr as f32)
+                } else if x < cr && y >= h - cr {
+                    let dx = cr as f32 - x as f32 - 0.5;
+                    let dy = y as f32 - (h - cr) as f32 + 0.5;
+                    dx * dx + dy * dy > (cr as f32) * (cr as f32)
+                } else if x >= w - cr && y >= h - cr {
+                    let dx = x as f32 - (w - cr) as f32 + 0.5;
+                    let dy = y as f32 - (h - cr) as f32 + 0.5;
+                    dx * dx + dy * dy > (cr as f32) * (cr as f32)
+                } else {
+                    false
+                };
+                if in_corner {
+                    blurred[y][x] = 0.0;
+                }
+            }
+        }
+    }
+
     let mut result = vec![vec![(0.0f32, ' '); w]; h];
     for y in 0..h {
         for x in 0..w {
@@ -110,8 +146,8 @@ fn dot_color(brightness: f32) -> Color {
 fn window_conf() -> Conf {
     Conf {
         window_title: "Digital Card".to_owned(),
-        window_width: 1300,
-        window_height: 850,
+    window_width: 1500,
+    window_height: 900,
         window_resizable: true,
         high_dpi: true,
         ..Default::default()
@@ -140,27 +176,52 @@ async fn load_cjk_font() -> Option<Font> {
 #[macroquad::main(window_conf)]
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let path = if args.len() > 1 {
-        args[1].clone()
-    } else {
-        "art.txt".to_string()
-    };
 
     let cjk_font = load_cjk_font().await;
 
-    let (art_grid, art_label) = match load_ascii_art_from_file(&path) {
-        Some(grid) => (grid, path),
-        None => (
-            vec![vec![(0.0f32, ' '); 0]; 0],
-            String::new(),
-        ),
+    let (art_grid, art_label) = if args.len() > 1 {
+        match load_ascii_art_from_file(&args[1]) {
+            Some(grid) => (grid, args[1].clone()),
+            None => {
+                eprintln!("Cannot load '{}', using embedded art.", args[1]);
+                match parse_ascii_art(EMBEDDED_ART) {
+                    Some(grid) => (grid, "(embedded)".to_string()),
+                    None => (
+                        vec![vec![(0.0f32, ' '); 0]; 0],
+                        String::new(),
+                    ),
+                }
+            }
+        }
+    } else {
+        match load_ascii_art_from_file("art.txt")
+            .or_else(|| parse_ascii_art(EMBEDDED_ART))
+        {
+            Some(grid) => (grid, "art.txt".to_string()),
+            None => (
+                vec![vec![(0.0f32, ' '); 0]; 0],
+                String::new(),
+            ),
+        }
     };
 
     let grid_h = art_grid.len();
     let grid_w = if grid_h > 0 { art_grid[0].len() } else { 0 };
 
-    let sx = CHAR_SIZE * 0.33;
-    let sy = CHAR_SIZE * 0.85;
+    let sx_base = CHAR_SIZE * 0.58;
+    let sy_base = CHAR_SIZE * 1.05;
+    let limit_w: f32 = 1000.0;
+    let limit_h: f32 = 750.0;
+    let raw_w = grid_w as f32 * sx_base;
+    let raw_h = grid_h as f32 * sy_base;
+    let scale = if raw_w > limit_w || raw_h > limit_h {
+        (limit_w / raw_w).min(limit_h / raw_h).clamp(0.25, 1.0)
+    } else {
+        1.0
+    };
+    let sx = sx_base * scale;
+    let sy = sy_base * scale;
+    let particle_char_size = CHAR_SIZE * scale;
     let art_w = grid_w as f32 * sx;
     let art_h = grid_h as f32 * sy;
     let art_start_x = screen_width() / 2.0 - art_w / 2.0;
@@ -204,7 +265,7 @@ async fn main() {
 
     for (i, name) in skill_names.iter().enumerate() {
         let angle = (i as f32 / n) * 2.0 * PI - PI / 2.0;
-        let r = (screen_width().min(screen_height()) * 0.38) as f32;
+        let r = (screen_width().min(screen_height()) * 0.56) as f32;
         let bx = screen_width() / 2.0 + angle.cos() * r;
         let by = screen_height() / 2.0 + angle.sin() * r;
 
@@ -297,7 +358,19 @@ async fn main() {
                 base.a,
             );
 
-            draw_text(&p.ch.to_string(), p.x, p.y, CHAR_SIZE, color);
+            if let Some(ref font) = cjk_font {
+                let params = TextParams {
+                    font: Some(font),
+                    font_size: particle_char_size as u16,
+                    font_scale: 1.0,
+                    font_scale_aspect: 1.0,
+                    rotation: 0.0,
+                    color,
+                };
+                draw_text_ex(&p.ch.to_string(), p.x, p.y, params);
+            } else {
+                draw_text(&p.ch.to_string(), p.x, p.y, particle_char_size, color);
+            }
         }
 
         for s in skills.iter() {
